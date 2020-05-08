@@ -9,7 +9,15 @@ if (!file_exists($report_dir) && !mkdir($report_dir) && !is_dir($report_dir)) {
 $pdo = new PDO('mysql:host=localhost;dbname=employees;port=3333', 'root', 'test123');
 
 $sql = <<<SQL
-SELECT emp_no, salary, to_date, DATEDIFF(to_date, from_date) AS date_diff FROM salaries ORDER BY emp_no, from_date
+SELECT
+       salaries.emp_no,
+       salary,
+       CONCAT(first_name, ' ', last_name) AS full_name,
+       to_date,
+       DATEDIFF(to_date, from_date) AS date_diff
+FROM salaries
+LEFT JOIN employees ON employees.emp_no = salaries.emp_no
+ORDER BY emp_no, from_date;
 SQL;
 
 $stats = [];
@@ -23,7 +31,16 @@ $emp = [
 ];
 
 $fp = fopen($report_dir . '/average_salary_increase_by_employee.csv', 'wb');
-fputcsv($fp, ['Employee No', 'Starting', 'Ending', 'Average Increase', 'Average Salary', 'Average Interval', 'Changes']);
+fputcsv($fp, [
+    'Employee No',
+    'Name',
+    'Starting',
+    'Ending',
+    'Average Increase',
+    'Average Salary',
+    'Average Interval',
+    'Changes'
+]);
 
 $salary = 0;
 $last_salary = 0;
@@ -39,6 +56,7 @@ foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $key => $details) {
             $sub_one_changes = $emp['changes'] - 1;
             fputcsv($fp, [
                 'emp_no'       => $last_emp_no,
+                'full_name'    => $details['full_name'],
                 'starting'     => $emp['starting'],
                 'ending'       => $last_salary,
                 'avg_increase' => $sub_one_changes === 0 ? 0 : round($emp['salary_diff_total'] / $sub_one_changes),
@@ -51,7 +69,6 @@ foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $key => $details) {
 
         // reset
         $emp = [
-            'emp_no'            => $emp_no,
             'starting'          => $salary,
             'salary_diff_total' => 0,
             'salary_total'      => 0,
@@ -63,7 +80,7 @@ foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $key => $details) {
     if ($last_salary > 0) {
         $emp['salary_diff_total'] += $salary - $last_salary;
     }
-    if (strpos($details['to_date'], '9999') === false) {
+    if ($details['to_date'] !== '9999-01-01') {
         $emp['interval_total'] += $date_diff;
     }
     $emp['salary_total'] += $salary;
