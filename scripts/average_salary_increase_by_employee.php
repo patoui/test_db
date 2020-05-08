@@ -10,14 +10,17 @@ $pdo = new PDO('mysql:host=localhost;dbname=employees;port=3333', 'root', 'test1
 
 $sql = <<<SQL
 SELECT
-       salaries.emp_no,
-       salary,
-       CONCAT(first_name, ' ', last_name) AS full_name,
-       to_date,
-       DATEDIFF(to_date, from_date) AS date_diff
+	salaries.emp_no,
+    departments.dept_name,
+    CONCAT(employees.first_name, ' ', employees.last_name) AS full_name,
+    salaries.salary,
+    salaries.to_date,
+    DATEDIFF(salaries.to_date, salaries.from_date) AS date_diff
 FROM salaries
 LEFT JOIN employees ON employees.emp_no = salaries.emp_no
-ORDER BY emp_no, from_date;
+LEFT JOIN dept_emp ON dept_emp.emp_no = salaries.emp_no
+LEFT JOIN departments ON departments.dept_no = dept_emp.dept_no
+ORDER BY salaries.emp_no, salaries.from_date;
 SQL;
 
 $stats = [];
@@ -34,6 +37,7 @@ $fp = fopen($report_dir . '/average_salary_increase_by_employee.csv', 'wb');
 fputcsv($fp, [
     'Employee No',
     'Name',
+    'Department',
     'Starting',
     'Ending',
     'Average Increase',
@@ -56,7 +60,8 @@ foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $key => $details) {
             $sub_one_changes = $emp['changes'] - 1;
             fputcsv($fp, [
                 'emp_no'       => $last_emp_no,
-                'full_name'    => $details['full_name'],
+                'full_name'    => $emp['full_name'],
+                'dept_name'    => $emp['dept_name'],
                 'starting'     => $emp['starting'],
                 'ending'       => $last_salary,
                 'avg_increase' => $sub_one_changes === 0 ? 0 : round($emp['salary_diff_total'] / $sub_one_changes),
@@ -69,6 +74,9 @@ foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $key => $details) {
 
         // reset
         $emp = [
+            'emp_no'            => $details['emp_no'],
+            'full_name'         => $details['full_name'],
+            'dept_name'         => $details['dept_name'],
             'starting'          => $salary,
             'salary_diff_total' => 0,
             'salary_total'      => 0,
@@ -93,6 +101,8 @@ if (!isset($stats[$last_emp_no])) {
     $sub_one_changes = $emp['changes'] - 1;
     fputcsv($fp, [
         'emp_no'       => $last_emp_no,
+        'full_name'    => $emp['full_name'],
+        'dept_name'    => $emp['dept_name'],
         'starting'     => $emp['starting'],
         'ending'       => $last_salary,
         'avg_increase' => $sub_one_changes === 0 ? 0 : round($emp['salary_diff_total'] / $sub_one_changes),
